@@ -42,7 +42,13 @@ router.get('/:symbol/quote', async (req, res) => {
       'SELECT * FROM price_snapshots WHERE symbol = $1 ORDER BY fetched_at DESC LIMIT 1',
       [req.params.symbol.toUpperCase()]
     );
-    res.json({ data: result.rows[0] || null });
+    const row = result.rows[0];
+    res.json({
+      data: row ? {
+        ...row,
+        price: parseFloat(row.price),
+      } : null
+    });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
