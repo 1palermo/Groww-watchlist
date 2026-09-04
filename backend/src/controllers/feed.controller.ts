@@ -34,7 +34,7 @@ export async function getSinceLastVisit(req: Request, res: Response) {
     }
 
     // Get scored events since last visit, score >= 50
-    const eventsResult = await query(
+    let eventsResult = await query(
       `SELECT se.*, ne.headline, ne.source_url, ne.plain_summary,
               tm.verdict, tm.ai_reasoning,
               t.category as thesis_category
@@ -49,6 +49,24 @@ export async function getSinceLastVisit(req: Request, res: Response) {
        LIMIT 50`,
       [symbols, lastSeen]
     );
+
+    // If nothing new happened in the short window since last visit, surface the most recent significant events
+    if (eventsResult.rows.length === 0) {
+      eventsResult = await query(
+        `SELECT se.*, ne.headline, ne.source_url, ne.plain_summary,
+                tm.verdict, tm.ai_reasoning,
+                t.category as thesis_category
+         FROM scored_events se
+         LEFT JOIN news_events ne ON se.news_event_id = ne.id
+         LEFT JOIN thesis_matches tm ON tm.scored_event_id = se.id
+         LEFT JOIN thesis t ON tm.thesis_id = t.id
+         WHERE se.symbol = ANY($1)
+           AND se.change_score >= 50
+         ORDER BY se.change_score DESC, se.created_at DESC
+         LIMIT 50`,
+        [symbols]
+      );
+    }
 
     // Build feed items
     const items = eventsResult.rows.map(row => ({
